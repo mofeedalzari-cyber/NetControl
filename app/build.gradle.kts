@@ -6,6 +6,13 @@ val localProps = Properties().apply {
 }
 fun cfg(key: String, env: String) = (localProps.getProperty(key) ?: System.getenv(env) ?: "").trim()
 
+/** إعدادات التوقيع: من keystore.properties (غير مرفوع) أو متغيرات البيئة KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD. */
+val keyProps = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun sign(key: String, env: String) = (keyProps.getProperty(key) ?: System.getenv(env) ?: "").trim()
+val releaseStore = sign("storeFile", "KEYSTORE_FILE")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -28,19 +35,20 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("mikroshamel-release.jks")
-            storePassword = "MikroShamel2026"
-            keyAlias = "mikroshamel"
-            keyPassword = "MikroShamel2026"
+        if (releaseStore.isNotEmpty()) create("release") {
+            storeFile = rootProject.file(releaseStore)
+            storePassword = sign("storePassword", "KEYSTORE_PASSWORD")
+            keyAlias = sign("keyAlias", "KEY_ALIAS")
+            keyPassword = sign("keyPassword", "KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            // للتجربة: التوقيع بمفتاح debug حتى يمكن تثبيت نسخة release مباشرة
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // بدون إعدادات توقيع release يُوقَّع بمفتاح debug حتى يمكن تثبيت النسخة للتجربة
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
